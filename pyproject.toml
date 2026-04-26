@@ -7,4 +7,12 @@ requires-python = ">=3.13"
 dependencies = [
     "matplotlib>=3.10.8",
     "numpy>=2.4.1",
+    "seaborn>=0.13.2",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["solver", "utils"]
