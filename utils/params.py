@@ -51,11 +51,25 @@ class Params:
         # Initialize wavenumbers
         # Note: Scaled by 2*pi to convert to angular wavenumbers of rad/length instead of cycles/length
         # This also means we don't need to use 1j * 2pi * kx when doing derivatives
-        self.kx = np.fft.fftfreq(self.Nx, self.Lx / self.Nx) * (2 * np.pi)
+        # Note: kx uses rfftfreq (not fftfreq) because fft2d uses rfft2/irfft2
+        # under the hood, which only computes the non-redundant half of the
+        # spectrum along the last transformed axis (Nx). All spectral-space
+        # arrays (and therefore kx_grid/ky_grid) must match that (Ny, Nx//2+1)
+        # shape or broadcasting will fail against the dealias mask, etc.
+        self.kx = np.fft.rfftfreq(self.Nx, self.Lx / self.Nx) * (2 * np.pi)
         self.ky = np.fft.fftfreq(self.Ny, self.Ly / self.Ny) * (2 * np.pi)
         self.kx_grid, self.ky_grid = np.meshgrid(self.kx, self.ky)
         self.k2 = self.kx_grid**2 + self.ky_grid**2
-        self.k2[0, 0] = 1.0e16  # Avoid division by zero
+        self.k2_div = self.k2.copy()
+        self.k2_div[0, 0] = 1.0e64  # Avoid division by zero
+        # self.k2[0, 0] = 1.0e16  # Avoid division by zero
+
+        # Implement 2/3 dealiasing rule
+        kx_cut = (2 * np.pi / self.Lx) * (self.Nx // 3)
+        ky_cut = (2 * np.pi / self.Ly) * (self.Ny // 3)
+        self.dealias_mask = (np.abs(self.kx_grid) <= kx_cut) & (
+            np.abs(self.ky_grid) <= ky_cut
+        )
 
         # Initalize arrays
         self.wzq = np.zeros(
@@ -82,9 +96,9 @@ class Params:
         # Del^2 or set it to the power, add setting for hyperviscosity
         if not self.hyper:
             self.res1 = np.exp(-self.eta * self.k2 * self.dt)
-            self.res2 = (1.0 - self.res1) / (self.eta * self.k2 * self.dt)
+            self.res2 = (1.0 - self.res1) / (self.eta * self.k2_div * self.dt)
             self.visc1 = np.exp(-self.nu * self.k2 * self.dt)
-            self.visc2 = (1.0 - self.visc1) / (self.nu * self.k2 * self.dt)
+            self.visc2 = (1.0 - self.visc1) / (self.nu * self.k2_div * self.dt)
         else:
             self.visc1 = np.exp(-((self.k2 * (self.dx / np.pi) ** 2) ** 4))
             self.visc2 = (1.0 + self.visc1) / 2.0

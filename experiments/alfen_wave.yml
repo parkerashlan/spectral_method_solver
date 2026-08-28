@@ -1,0 +1,23 @@
+
+params:
+  Nx: 256
+  Ny: 256
+  Lx: 6.28318530718 # 2 * pi
+  # Lx: 1
+  Ly: 6.28318530718 # 2 * pi
+  # Ly: 1
+  # dt: 0.0009765625 # 1 / 1024
+  dt:  0.00048828125 # 1 / 2048
+  nt: 4096
+  nt_save: 1
+  eta: 0.001
+  nu: 0.001
+  b0x: 2
+
+extra_metadata:
+  v1: 2.0
+  k: 2
+  notes: "Alfen Wave standing wave"
+
+initial_conditions:
+  name: "alfvenwave"

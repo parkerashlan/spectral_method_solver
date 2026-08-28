@@ -8,7 +8,11 @@ class FFT2DSolver:
     def __init__(self, params: params.Params, **kwargs):
         self.params = params
         self.fft2d = lambda f, inverse: fft2d(
-            f, self.params.Nx, self.params.Ny, inverse=inverse
+            f,
+            self.params.Nx,
+            self.params.Ny,
+            inverse=inverse,
+            dealias_mask=self.params.dealias_mask,
         )
 
     def _compute_derivative(self, vec):
@@ -45,7 +49,7 @@ class FFT2DSolver:
         """
         djzdx_phys, djzdy_phys = self._compute_derivative(self.jz)
 
-        Ahat = self.jz / self.params.k2
+        Ahat = self.jz / self.params.k2_div
 
         Aphys = self.fft2d(Ahat, inverse=True)
 
@@ -83,7 +87,7 @@ class FFT2DSolver:
         """
         # Compute nonlinear advection term for first step
         dwzdx_phys, dwzdy_phys = self._compute_derivative(self.wz)
-        psi = self.wz / self.params.k2  # Compute stream function
+        psi = self.wz / self.params.k2_div  # Compute stream function
 
         # Compute stream function in physical space
         psi_phys = self.fft2d(psi, inverse=True)
@@ -138,19 +142,28 @@ class FFT2DSolver:
 
         bxhat = self.fft2d(bx, inverse=False)
         byhat = self.fft2d(by, inverse=False)
-        dbxdx = 1j * self.params.kx_grid * bxhat
-        dbxdy = 1j * self.params.ky_grid * bxhat
-        dbydx = 1j * self.params.kx_grid * byhat
+        dbxdx_hat = 1j * self.params.kx_grid * bxhat
+        dbxdy_hat = 1j * self.params.ky_grid * bxhat
+        dbydx_hat = 1j * self.params.kx_grid * byhat
+        dbxdx_phys = self.fft2d(dbxdx_hat, inverse=True)
+        dbxdy_phys = self.fft2d(dbxdy_hat, inverse=True)
+        dbydx_phys = self.fft2d(dbydx_hat, inverse=True)
 
         vxhat = self.fft2d(vx, inverse=False)
         vyhat = self.fft2d(vy, inverse=False)
-        dvxdx = 1j * self.params.kx_grid * vxhat
-        dvxdy = 1j * self.params.ky_grid * vxhat
-        dvydx = 1j * self.params.kx_grid * vyhat
+        dvxdx_hat = 1j * self.params.kx_grid * vxhat
+        dvxdy_hat = 1j * self.params.ky_grid * vxhat
+        dvydx_hat = 1j * self.params.kx_grid * vyhat
+        dvxdx_phys = self.fft2d(dvxdx_hat, inverse=True)
+        dvxdy_phys = self.fft2d(dvxdy_hat, inverse=True)
+        dvydx_phys = self.fft2d(dvydx_hat, inverse=True)
 
-        almost_curl = 2 * dbxdx * (dvxdy + dvydx) - 2 * dvxdx * (dbxdy + dbydx)
+        almost_curl = 2 * dbxdx_phys * (dvxdy_phys + dvydx_phys) - 2 * dvxdx_phys * (
+            dbxdy_phys + dbydx_phys
+        )
+        almost_curl_hat = self.fft2d(almost_curl, inverse=False)
 
-        nonlin = vdotgradj + bdotgradw + almost_curl
+        nonlin = vdotgradj + bdotgradw + almost_curl_hat
 
         results = {"nonlin": nonlin}
 
@@ -176,20 +189,30 @@ class FFT2DSolver:
         vx = vorticity_results["vx"]
         vy = vorticity_results["vy"]
         self.wz = (
-            self.wz * self.params.visc1
+            self.wz0 * self.params.visc1
             + self.params.dt * vorticity_nonlin_old * self.params.visc2
         )
 
         # Advect current density forward one step (Euler)
         cd_nonlin_old = current_density_results["nonlin"]
         self.jz = (
-            self.jz * self.params.res1
+            self.jz0 * self.params.res1
             + self.params.dt * cd_nonlin_old * self.params.res2
         )
         self.params.cfl[0] = np.max(
             np.max(abs(np.sqrt(vx**2 + vy**2))) * self.params.dt / self.params.dx
         )
         print(self.params.cfl[0])
+
+        # Save out results for first time step
+        self.params.vx[:, :, 0] = vorticity_results["vx"]
+        self.params.vy[:, :, 0] = vorticity_results["vy"]
+        self.params.psi[:, :, 0] = vorticity_results["psi"]
+        self.params.wzq[:, :, 0] = self.fft2d(self.wz0, inverse=True)
+        self.params.jzq[:, :, 0] = self.fft2d(self.jz0, inverse=True)
+        self.params.bx[:, :, 0] = vorticity_results["bx"]
+        self.params.by[:, :, 0] = vorticity_results["by"]
+        self.params.A[:, :, 0] = vorticity_results["A"]
 
         # Compute nonlinear advection term for corrector step
         vorticity_results = self._compute_nonlinear_vorticity()
@@ -201,26 +224,16 @@ class FFT2DSolver:
 
         # Apply corrector step (trapezoidal rule)
         self.wz = (
-            self.wz * self.params.visc1
+            self.wz0 * self.params.visc1
             + 0.5
             * self.params.dt
             * (vorticity_nonlin + vorticity_nonlin_old)
             * self.params.visc2
         )
         self.jz = (
-            self.jz * self.params.res1
+            self.jz0 * self.params.res1
             + 0.5 * self.params.dt * (cd_nonlin + cd_nonlin_old) * self.params.res2
         )
-
-        # Save out results for first time step
-        self.params.vx[:, :, 0] = vorticity_results["vx"]
-        self.params.vy[:, :, 0] = vorticity_results["vy"]
-        self.params.psi[:, :, 0] = vorticity_results["psi"]
-        self.params.wzq[:, :, 0] = self.fft2d(self.wz, inverse=True)
-        self.params.jzq[:, :, 0] = self.fft2d(cd_nonlin, inverse=True)
-        self.params.bx[:, :, 0] = vorticity_results["bx"]
-        self.params.by[:, :, 0] = vorticity_results["by"]
-        self.params.A[:, :, 0] = vorticity_results["A"]
 
         for t in range(1, self.params.nt):
             vorticity_results = self._compute_nonlinear_vorticity()
@@ -238,6 +251,32 @@ class FFT2DSolver:
                 np.max(abs(np.sqrt(vx**2 + vy**2))) * self.params.dt / self.params.dx
             )
 
+            if t % self.params.nt_save == 0:
+                # Save out results for current time step every nt_save time steps
+                self.params.vx[:, :, int(t / self.params.nt_save)] = vx.astype(
+                    np.float64
+                )
+                self.params.vy[:, :, int(t / self.params.nt_save)] = vy.astype(
+                    np.float64
+                )
+                self.params.psi[:, :, int(t / self.params.nt_save)] = psi_phys
+                self.params.wzq[:, :, int(t / self.params.nt_save)] = self.fft2d(
+                    self.wz, inverse=True
+                )
+                self.params.jzq[:, :, int(t / self.params.nt_save)] = self.fft2d(
+                    self.jz, inverse=True
+                )
+                self.params.bx[:, :, int(t / self.params.nt_save)] = vorticity_results[
+                    "bx"
+                ].astype(np.float64)
+                self.params.by[:, :, int(t / self.params.nt_save)] = vorticity_results[
+                    "by"
+                ].astype(np.float64)
+                self.params.A[:, :, int(t / self.params.nt_save)] = vorticity_results[
+                    "A"
+                ]
+                print(f"CFL: {self.params.cfl[t]}")
+
             # Advect forward one step (AB2 step)
             self.wz = (
                 self.wz * self.params.visc1
@@ -252,27 +291,6 @@ class FFT2DSolver:
                 * self.params.res2
             )
 
-            if t % self.params.nt_save == 0:
-                # Save out results for current time step every nt_save time steps
-                self.params.vx[:, :, int(t / self.params.nt_save)] = vx
-                self.params.vy[:, :, int(t / self.params.nt_save)] = vy
-                self.params.psi[:, :, int(t / self.params.nt_save)] = psi_phys
-                self.params.wzq[:, :, int(t / self.params.nt_save)] = self.fft2d(
-                    self.wz, inverse=True
-                )
-                self.params.jzq[:, :, int(t / self.params.nt_save)] = self.fft2d(
-                    self.jz, inverse=True
-                )
-                self.params.bx[:, :, int(t / self.params.nt_save)] = vorticity_results[
-                    "bx"
-                ]
-                self.params.by[:, :, int(t / self.params.nt_save)] = vorticity_results[
-                    "by"
-                ]
-                self.params.A[:, :, int(t / self.params.nt_save)] = vorticity_results[
-                    "A"
-                ]
-                print(f"CFL: {self.params.cfl[t]}")
             vorticity_nonlin_old = vorticity_nonlin
             cd_nonlin_old = cd_nonlin
 

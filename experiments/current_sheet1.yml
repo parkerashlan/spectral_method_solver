@@ -1,0 +1,21 @@
+
+params:
+  Nx: 256
+  Ny: 256
+  Lx: 2
+  Ly: 2
+  dt: 0.0009765625 # 1 / 1024
+  nt: 3048
+  nt_save: 1
+  eta: 0.001
+  nu: 0.001
+
+extra_metadata:
+  u0: 1.0
+  strength: "+/-1"
+  sheet_loc: "+/-0.5"
+  solve_time: end - start
+  notes: "Symmetric current sheet around center of domain"
+
+initial_conditions:
+  name: "current_sheet"

@@ -1,0 +1,25 @@
+params:
+  Nx: 256
+  Ny: 256
+  # Lx: 6.28318530718 # 2 * pi
+  Lx: 1
+  # Ly: 6.28318530718 # 2 * pi
+  Ly: 1
+  # dt: 0.0009765625 # 1 / 1024
+  dt: 0.00048
+  nt: 1024
+  nt_save: 1
+  eta: 0.001
+  nu: 0.001
+
+extra_metadata:
+  amplitude: 5.0
+  sigma_x: 128.0
+  sigma_y: 128.0
+  center_x: "+/-0.25"
+  center_y: "+/-0.25"
+  solve_time: end - start
+  notes: "Double Four Gaussian vortices"
+
+initial_conditions:
+  name: "four_vortice"

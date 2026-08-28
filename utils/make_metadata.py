@@ -27,9 +27,11 @@ def make_metadata(params, filename, dir="./", comment="", **kwargs):
 
 
 def make_run_dir(output_dir):
-    cur_datetime = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_dir = Path(output_dir) / cur_datetime
-    Path(run_dir).mkdir(exist_ok=True)
+    cur_day = datetime.datetime.now().strftime("%Y-%m-%d")
+    cur_time = datetime.datetime.now().strftime("%H-%M-%S")
+
+    run_dir = Path(output_dir) / cur_day / cur_time
+    Path(run_dir).mkdir(exist_ok=True, parents=True)
 
     viz_dir = run_dir / "viz"
     Path(viz_dir).mkdir(exist_ok=True)
