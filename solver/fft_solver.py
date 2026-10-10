@@ -1,7 +1,8 @@
 import numpy as np
 
-import utils.params as params
 from solver.fft2d import fft2d
+from solver.io_hdf5 import RunWriter
+from utils import params
 
 
 class FFT2DSolver:
@@ -13,6 +14,23 @@ class FFT2DSolver:
             self.params.Ny,
             inverse=inverse,
             dealias_mask=self.params.dealias_mask,
+        )
+
+    def _cfl(self, vx, vy, bx, by):
+        cfl = self.params.dt * np.max(
+            (np.abs(vx) + np.abs(bx)) / self.params.dx
+            + (np.abs(vy) + np.abs(by)) / self.params.dy
+        )
+        return cfl
+
+    def _diagnostics(self, r, t_phys):
+        dV = self.params.dx * self.params.dy
+        return dict(
+            t=t_phys,
+            cfl=self._cfl(r["vx"], r["vy"], r["bx"], r["by"]),
+            e_kin=0.5 * np.sum(r["vx"] ** 2 + r["vy"] ** 2) * dV,
+            e_mag=0.5 * np.sum(r["bx"] ** 2 + r["by"] ** 2) * dV,
+            jmax=np.abs(self.fft2d(self.jz, inverse=True)).max(),
         )
 
     def _compute_derivative(self, vec):
@@ -93,8 +111,8 @@ class FFT2DSolver:
         psi_phys = self.fft2d(psi, inverse=True)
 
         # curl(psi) = v = (dpsi/dy, -dpsi/dx) = (i*ky*psi, -i*kx*psi) = (vx, vy)
-        vx = self.fft2d(1j * self.params.ky_grid * psi, inverse=True)
-        vy = self.fft2d(-1j * self.params.kx_grid * psi, inverse=True)
+        vx = self.fft2d(1j * self.params.ky_grid * psi, inverse=True) + self.params.v0x
+        vy = self.fft2d(-1j * self.params.kx_grid * psi, inverse=True) + self.params.v0y
 
         # Get nonlinear advection term using advection equation
         nonlin = self.fft2d(-vx * dwzdx_phys - vy * dwzdy_phys, inverse=False)
@@ -169,148 +187,106 @@ class FFT2DSolver:
 
         return results
 
-    def solve(self):
+    def solve(self, outfile="run.h5"):
 
-        # Initialize vorticity and transform to frequency space
-        self.wz0 = self.fft2d(self.params.wzq[:, :, 0], inverse=False)
-        self.wz = self.wz0.copy()
+        with RunWriter(outfile, self.params) as out:
+            # Initialize vorticity and transform to frequency space
+            self.wz0 = self.fft2d(self.params.w, inverse=False)
+            self.wz = self.wz0.copy()
 
-        self.jz0 = self.fft2d(self.params.jzq[:, :, 0], inverse=False)
-        self.jz = self.jz0.copy()
+            self.jz0 = self.fft2d(self.params.j, inverse=False)
+            self.jz = self.jz0.copy()
 
-        # Compute nonlinear advection term
-        vorticity_results = self._compute_nonlinear_vorticity()
-        current_density_results = self._compute_nonlinear_current_density(
-            **vorticity_results
-        )
-
-        # Advect vorticity forward one step (Euler)
-        vorticity_nonlin_old = vorticity_results["nonlin"]
-        vx = vorticity_results["vx"]
-        vy = vorticity_results["vy"]
-        self.wz = (
-            self.wz0 * self.params.visc1
-            + self.params.dt * vorticity_nonlin_old * self.params.visc2
-        )
-
-        # Advect current density forward one step (Euler)
-        cd_nonlin_old = current_density_results["nonlin"]
-        self.jz = (
-            self.jz0 * self.params.res1
-            + self.params.dt * cd_nonlin_old * self.params.res2
-        )
-        self.params.cfl[0] = np.max(
-            np.max(abs(np.sqrt(vx**2 + vy**2))) * self.params.dt / self.params.dx
-        )
-        print(self.params.cfl[0])
-
-        # Save out results for first time step
-        self.params.vx[:, :, 0] = vorticity_results["vx"]
-        self.params.vy[:, :, 0] = vorticity_results["vy"]
-        self.params.psi[:, :, 0] = vorticity_results["psi"]
-        self.params.wzq[:, :, 0] = self.fft2d(self.wz0, inverse=True)
-        self.params.jzq[:, :, 0] = self.fft2d(self.jz0, inverse=True)
-        self.params.bx[:, :, 0] = vorticity_results["bx"]
-        self.params.by[:, :, 0] = vorticity_results["by"]
-        self.params.A[:, :, 0] = vorticity_results["A"]
-
-        # Compute nonlinear advection term for corrector step
-        vorticity_results = self._compute_nonlinear_vorticity()
-        current_density_results = self._compute_nonlinear_current_density(
-            **vorticity_results
-        )
-        vorticity_nonlin = vorticity_results["nonlin"]
-        cd_nonlin = current_density_results["nonlin"]
-
-        # Apply corrector step (trapezoidal rule)
-        self.wz = (
-            self.wz0 * self.params.visc1
-            + 0.5
-            * self.params.dt
-            * (vorticity_nonlin + vorticity_nonlin_old)
-            * self.params.visc2
-        )
-        self.jz = (
-            self.jz0 * self.params.res1
-            + 0.5 * self.params.dt * (cd_nonlin + cd_nonlin_old) * self.params.res2
-        )
-
-        for t in range(1, self.params.nt):
+            # Compute nonlinear advection term
             vorticity_results = self._compute_nonlinear_vorticity()
-            vorticity_nonlin = vorticity_results["nonlin"]
-            vx = vorticity_results["vx"]
-            vy = vorticity_results["vy"]
-            psi_phys = vorticity_results["psi"]
-
             current_density_results = self._compute_nonlinear_current_density(
                 **vorticity_results
             )
-            cd_nonlin = current_density_results["nonlin"]
+            # Save out results for first time step
+            out.write_scalars(
+                0,
+                **self._diagnostics(vorticity_results, 0),
+            )
+            out.append_fields(0.0, vorticity_results["A"], vorticity_results["psi"])
 
-            self.params.cfl[t] = np.max(
-                np.max(abs(np.sqrt(vx**2 + vy**2))) * self.params.dt / self.params.dx
+            # Advect vorticity forward one step (Euler)
+            vorticity_nonlin_old = vorticity_results["nonlin"]
+            vx = vorticity_results["vx"]
+            vy = vorticity_results["vy"]
+            self.wz = (
+                self.wz0 * self.params.visc1
+                + self.params.dt * vorticity_nonlin_old * self.params.visc2
             )
 
-            if t % self.params.nt_save == 0:
-                # Save out results for current time step every nt_save time steps
-                self.params.vx[:, :, int(t / self.params.nt_save)] = vx.astype(
-                    np.float64
-                )
-                self.params.vy[:, :, int(t / self.params.nt_save)] = vy.astype(
-                    np.float64
-                )
-                self.params.psi[:, :, int(t / self.params.nt_save)] = psi_phys
-                self.params.wzq[:, :, int(t / self.params.nt_save)] = self.fft2d(
-                    self.wz, inverse=True
-                )
-                self.params.jzq[:, :, int(t / self.params.nt_save)] = self.fft2d(
-                    self.jz, inverse=True
-                )
-                self.params.bx[:, :, int(t / self.params.nt_save)] = vorticity_results[
-                    "bx"
-                ].astype(np.float64)
-                self.params.by[:, :, int(t / self.params.nt_save)] = vorticity_results[
-                    "by"
-                ].astype(np.float64)
-                self.params.A[:, :, int(t / self.params.nt_save)] = vorticity_results[
-                    "A"
-                ]
-                print(f"CFL: {self.params.cfl[t]}")
+            # Advect current density forward one step (Euler)
+            cd_nonlin_old = current_density_results["nonlin"]
+            self.jz = (
+                self.jz0 * self.params.res1
+                + self.params.dt * cd_nonlin_old * self.params.res2
+            )
+            print(self._cfl(vx, vy, vorticity_results["bx"], vorticity_results["by"]))
 
-            # Advect forward one step (AB2 step)
+            # Compute nonlinear advection term for corrector step
+            vorticity_results = self._compute_nonlinear_vorticity()
+            current_density_results = self._compute_nonlinear_current_density(
+                **vorticity_results
+            )
+            vorticity_nonlin = vorticity_results["nonlin"]
+            cd_nonlin = current_density_results["nonlin"]
+
+            # Apply corrector step (trapezoidal rule)
             self.wz = (
-                self.wz * self.params.visc1
-                + self.params.dt
-                * (1.5 * vorticity_nonlin - 0.5 * vorticity_nonlin_old)
+                self.wz0 * self.params.visc1
+                + 0.5
+                * self.params.dt
+                * (vorticity_nonlin + vorticity_nonlin_old)
                 * self.params.visc2
             )
             self.jz = (
-                self.jz * self.params.res1
-                + self.params.dt
-                * (1.5 * cd_nonlin - 0.5 * cd_nonlin_old)
-                * self.params.res2
+                self.jz0 * self.params.res1
+                + 0.5 * self.params.dt * (cd_nonlin + cd_nonlin_old) * self.params.res2
             )
 
-            vorticity_nonlin_old = vorticity_nonlin
-            cd_nonlin_old = cd_nonlin
+            for t in range(1, self.params.nt):
+                vorticity_results = self._compute_nonlinear_vorticity()
+                vorticity_nonlin = vorticity_results["nonlin"]
 
-        results = {
-            "vorticity": self.params.wzq,
-            "cfl": self.params.cfl,
-            "vx": self.params.vx,
-            "vy": self.params.vy,
-            "psi": self.params.psi,
-            "jz": self.params.jzq,
-            "bx": self.params.bx,
-            "by": self.params.by,
-            "A": self.params.A,
-            "k2": self.params.k2,
-            "kx": self.params.kx,
-            "ky": self.params.ky,
-            "res1": self.params.res1,
-            "res2": self.params.res2,
-            "visc1": self.params.visc1,
-            "visc2": self.params.visc2,
-        }
+                out.write_scalars(
+                    t,
+                    **self._diagnostics(vorticity_results, t * self.params.dt),
+                )
 
+                current_density_results = self._compute_nonlinear_current_density(
+                    **vorticity_results
+                )
+                cd_nonlin = current_density_results["nonlin"]
+
+                if t % self.params.nt_save == 0:
+                    out.append_fields(
+                        t * self.params.dt,
+                        vorticity_results["A"],
+                        vorticity_results["psi"],
+                    )
+                    print(
+                        f"CFL: {self._cfl(vorticity_results['vx'], vorticity_results['vy'], vorticity_results['bx'], vorticity_results['by'])}"
+                    )
+
+                # Advect forward one step (AB2 step)
+                self.wz = (
+                    self.wz * self.params.visc1
+                    + self.params.dt
+                    * (1.5 * vorticity_nonlin - 0.5 * vorticity_nonlin_old)
+                    * self.params.visc2
+                )
+                self.jz = (
+                    self.jz * self.params.res1
+                    + self.params.dt
+                    * (1.5 * cd_nonlin - 0.5 * cd_nonlin_old)
+                    * self.params.res2
+                )
+
+                vorticity_nonlin_old = vorticity_nonlin
+                cd_nonlin_old = cd_nonlin
+
+        results = {"outfile": str(outfile)}
         return results

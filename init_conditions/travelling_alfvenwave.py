@@ -6,7 +6,6 @@ def init_functions():
     k = 2
     w0 = lambda x, y: v1 * k * np.sin(k * x)
 
-    # j0 = lambda x, y: -v1 * k * np.sin(k * x)
-    j0 = lambda x, y: 0 * x + 0 * y
+    j0 = lambda x, y: -v1 * k * np.sin(k * x)
 
     return w0, j0

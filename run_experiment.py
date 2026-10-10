@@ -75,21 +75,10 @@ def main(args):
 
     start = time.time()
     solver = FFT2DSolver(params)
-    solver_results = solver.solve()
+    solver_results = solver.solve(outfile=Path(cur_run_dir) / "run.h5")
     end = time.time()
     print(f"Solve time: {end - start:.2f} seconds")
-
-    kin_energy = (1 / 2) * (solver_results["vx"] ** 2 + solver_results["vy"] ** 2)
-    mag_energy = (1 / 2) * (solver_results["bx"] ** 2 + solver_results["by"] ** 2)
-
-    np.savez(
-        cur_run_dir / "solver_results.npz",
-        **solver_results,
-        ke=kin_energy,
-        me=mag_energy,
-        x=params.x,
-        y=params.y,
-    )
+    print(f"Saved results to {cur_run_dir}")
 
 
 if __name__ == "__main__":

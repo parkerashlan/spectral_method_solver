@@ -8,16 +8,16 @@ params:
   # Ly: 1
   # dt: 0.0009765625 # 1 / 1024
   dt:  0.00048828125 # 1 / 2048
-  nt: 4096
+  nt: 20480 # 10s
   nt_save: 1
-  eta: 0.001
-  nu: 0.001
-  b0x: 2
+  eta: 0.05
+  nu: 0.05
+  b0x: 1
 
 extra_metadata:
   v1: 2.0
   k: 2
-  notes: "Alfen Wave standing wave"
+  notes: "Alfen Wave travelling wave"
 
 initial_conditions:
-  name: "alfvenwave"
+  name: "travelling_alfvenwave"

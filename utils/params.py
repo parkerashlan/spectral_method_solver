@@ -36,12 +36,19 @@ class Params:
     hyper: bool = False
     b0x: float = 0.0
     b0y: float = 0.0
+    v0x: float = 0.0
+    v0y: float = 0.0
+    symm: bool = True
 
     def __post_init__(self):
 
         # Create discrete grid
-        self.x = np.linspace(-0.5 * self.Lx, 0.5 * self.Lx, self.Nx, endpoint=False)
-        self.y = np.linspace(-0.5 * self.Ly, 0.5 * self.Ly, self.Ny, endpoint=False)
+        if self.symm:
+            self.x = np.linspace(-0.5 * self.Lx, 0.5 * self.Lx, self.Nx, endpoint=False)
+            self.y = np.linspace(-0.5 * self.Ly, 0.5 * self.Ly, self.Ny, endpoint=False)
+        else:
+            self.x = np.linspace(0, self.Lx, self.Nx, endpoint=False)
+            self.y = np.linspace(0, self.Ly, self.Ny, endpoint=False)
         self.x_grid, self.y_grid = np.meshgrid(self.x, self.y)
         self.w = self.w0(self.x_grid, self.y_grid)
         self.j = self.j0(self.x_grid, self.y_grid)
@@ -65,32 +72,32 @@ class Params:
         # self.k2[0, 0] = 1.0e16  # Avoid division by zero
 
         # Implement 2/3 dealiasing rule
-        kx_cut = (2 * np.pi / self.Lx) * (self.Nx // 3)
-        ky_cut = (2 * np.pi / self.Ly) * (self.Ny // 3)
-        self.dealias_mask = (np.abs(self.kx_grid) <= kx_cut) & (
-            np.abs(self.ky_grid) <= ky_cut
+        self.kx_cut = (2 * np.pi / self.Lx) * (self.Nx // 3)
+        self.ky_cut = (2 * np.pi / self.Ly) * (self.Ny // 3)
+        self.dealias_mask = (np.abs(self.kx_grid) <= self.kx_cut) & (
+            np.abs(self.ky_grid) <= self.ky_cut
         )
 
         # Initalize arrays
-        self.wzq = np.zeros(
-            (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
-        )
-        self.vx = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        self.vy = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        self.psi = np.zeros(
-            (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
-        )
-        # Initialize electromagnetic arrays
-        self.jzq = np.zeros(
-            (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
-        )
-        self.bx = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        self.by = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        self.A = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        self.cfl = np.zeros((int(self.nt), 1))
+        # self.wzq = np.zeros(
+        #     (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
+        # )
+        # self.vx = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
+        # self.vy = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
+        # self.psi = np.zeros(
+        #     (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
+        # )
+        # # Initialize electromagnetic arrays
+        # self.jzq = np.zeros(
+        #     (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
+        # )
+        # self.bx = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
+        # self.by = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
+        # self.A = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
+        self.cfl = None
 
-        self.wzq[:, :, 0] = self.w
-        self.jzq[:, :, 0] = self.j
+        # self.wzq[:, :, 0] = self.w
+        # self.jzq[:, :, 0] = self.j
 
         # Initialize viscosity
         # Del^2 or set it to the power, add setting for hyperviscosity

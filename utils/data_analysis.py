@@ -6,11 +6,9 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 from matplotlib.colors import Normalize
 
-from utils.animate import show_animation, show_quiver, show_streamplot
 from utils.animate_data import AnimatePhysics
 
-
-#def parse_args():
+# def parse_args():
 #    parser = argparse.ArgumentParser()
 #    parser.add_argument("--data_path", type=str, help="Path to the solver results file")
 #    parser.add_argument("--save_path", type=str, default="./streamplot_vs_psi.mp4")
@@ -23,7 +21,7 @@ from utils.animate_data import AnimatePhysics
 #    return args
 #
 #
-#def draw_frame(t, ax, data, x, y, norms, magnetic=False):
+# def draw_frame(t, ax, data, x, y, norms, magnetic=False):
 #    vx, vy, psi = data["vx"], data["vy"], data["psi"]
 #
 #    ax[0, 0].cla()
@@ -148,11 +146,14 @@ from utils.animate_data import AnimatePhysics
 # if __name__ == "__main__":
 #     main()
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_path", type=str, help="Path to the solver results file")
     args = parser.parse_args()
     return args
+
+
 def main():
     args = parse_args()
     data = np.load(args.data_path)
@@ -175,9 +176,11 @@ def main():
     )
     plots = [
         {"data_key": "w", "title": "Vorticity", "type": "field"},
-        #{"data_key": "bx", "title": "Magnetic Field Bx", "type": "field"},
+        # {"data_key": "bx", "title": "Magnetic Field Bx", "type": "field"},
     ]
     animator.plot_anim(plots)
+
+
 # ax[0].plot(data["ke"][:-1] / np.max(data["ke"]), marker="o", markersize=1)
 # ax[0].set_title("Kinetic Energy")
 # ax[1].plot(mag_energy[:-1] / np.max(mag_energy), marker="o", markersize=1)

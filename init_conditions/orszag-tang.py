@@ -3,13 +3,10 @@ import numpy as np
 
 def init_functions():
 
-    w0 = lambda x, y: 2 * np.pi * (np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y))
+    psi_0 = 2
+    w0 = lambda x, y: psi_0 * (-np.sin(y) + np.cos(x))
 
-    j0 = lambda x, y: (
-        (1 / np.sqrt(4 * np.pi))
-        * 2
-        * np.pi
-        * (2 * np.pi * np.cos(4 * np.pi * x) + np.cos(2 * np.pi * y))
-    )
+    A_0 = 1
+    j0 = lambda x, y: A_0 * (-4 * np.cos(2 * y) + 2 * np.cos(x))
 
     return w0, j0

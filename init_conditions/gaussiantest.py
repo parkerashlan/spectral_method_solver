@@ -4,13 +4,6 @@ import numpy as np
 
 # from data_analysis import mag_energy
 from solver.fft_solver import FFT2DSolver
-from utils.animate import (
-    animate_quiver,
-    animate_streamplot,
-    show_animation,
-    show_quiver,
-    show_streamplot,
-)
 from utils.make_metadata import make_metadata, make_run_dir
 from utils.params import Params
 

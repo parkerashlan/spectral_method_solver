@@ -48,7 +48,5 @@ def fft2d(
         f = np.asarray(f, dtype=np.complex128)
         f = f.copy()
         f *= _broadcastable_mask(dealias_mask, f.ndim)
-        g = np.real(np.fft.irfft2(f, s=(Ny, Nx), axes=(0, 1))).astype(
-            np.float64
-        )  # , norm="forward"))
+        g = np.fft.irfft2(f, s=(Ny, Nx), axes=(0, 1))  # , norm="forward"))
     return g

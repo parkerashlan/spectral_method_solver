@@ -1,21 +1,18 @@
 
 params:
-  Nx: 256
-  Ny: 256
-  # Lx: 6.28318530718 # 2 * pi
-  Lx: 1
-  # Ly: 6.28318530718 # 2 * pi
-  Ly: 1
-  # dt: 0.0009765625 # 1 / 1024
-  dt: 0.00048
-  nt: 1024
+  Nx: 64
+  Ny: 64
+  Lx: 6.28318530718 # 2 * pi
+  Ly: 6.28318530718 # 2 * pi
+  dt: 0.001
+  nt: 1000
   nt_save: 1
-  eta: 0.001
-  nu: 0.001
+  eta: 0.000001
+  nu: 0.000001
+  symm: False
 
 extra_metadata:
-  solve_time: end - start
-  notes: "Double Four Gaussian vortices"
+  notes: "Orszag-Tang vortex, symmetric grid -2pi to 2pi"
 
 initial_conditions:
-  name: "four_vortice"
+  name: "orszag-tang"
