@@ -34,7 +34,9 @@ def load_init_condition(init_condition_path):
 
 def main(args):
     init_conds_path = Path("./init_conditions")
-    init_conds = [f for f in init_conds_path.iterdir() if f.is_file()]
+    init_conds = [
+        f for f in init_conds_path.iterdir() if f.is_file()
+    ]  # gather all initial condition file names
 
     if args.show_init_conds:
         for cond in init_conds:
@@ -54,8 +56,8 @@ def main(args):
     except IndexError:
         raise ValueError(f"Initial condition '{init_condition['name']}' not found")
     init_condition_module = load_init_condition(init_condition_path)
-    w0, j0 = getattr(init_condition_module, "init_functions")()
-    params = Params(w0=w0, j0=j0, **cfg["params"])
+    w0, A0 = getattr(init_condition_module, "init_functions")()
+    params = Params(w0=w0, A0=A0, **cfg["params"])
 
     if args.output_dir:
         OUTPUT_DIR = args.output_dir

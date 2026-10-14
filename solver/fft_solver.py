@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 
 from solver.fft2d import fft2d
@@ -187,7 +189,13 @@ class FFT2DSolver:
 
         return results
 
-    def solve(self, outfile="run.h5"):
+    def _compute_nonlinear_vec_potential(self, bx, by, psi, A):
+        dpsidx_phys, dpsidy_phys = self._compute_derivative(psi)
+        nonlin = self.fft2d(bx * dpsidx_phys + by * dpsidy_phys, inverse=False)
+
+        return nonlin
+
+    def solve(self, outfile: str | Path = "run.h5"):
 
         with RunWriter(outfile, self.params) as out:
             # Initialize vorticity and transform to frequency space
