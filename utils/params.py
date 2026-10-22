@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from solver.fft2d import fft2d
+
 
 @dataclass
 class Params:
@@ -10,7 +12,7 @@ class Params:
 
     Args:
         w0 (callable): Initial vorticity field.
-        j0 (callable): Initial current density.
+        A0 (callable): Initial vector (magnetic) potential.
         Nx (int): Number of grid points in x direction.
         Ny (int): Number of grid points in y direction.
         Lx (float): Length of domain in x direction.
@@ -20,10 +22,12 @@ class Params:
         nt_save (int): Number of time steps to save.
         nu (float): Viscosity coefficient.
         eta (float): Magnetic resistivity coefficient.
+        integrator (str): Time integrator: "ab2", "ab3" or "rk4" (ETD schemes),
+            or "ab2-etd-approx" / "ab3-etd-approx" (integrating-factor approximation).
     """
 
     w0: callable
-    j0: callable
+    A0: callable
     Nx: int
     Ny: int
     Lx: float
@@ -39,6 +43,7 @@ class Params:
     v0x: float = 0.0
     v0y: float = 0.0
     symm: bool = True
+    integrator: str = "ab2"
 
     def __post_init__(self):
 
@@ -51,7 +56,7 @@ class Params:
             self.y = np.linspace(0, self.Ly, self.Ny, endpoint=False)
         self.x_grid, self.y_grid = np.meshgrid(self.x, self.y)
         self.w = self.w0(self.x_grid, self.y_grid)
-        self.j = self.j0(self.x_grid, self.y_grid)
+        self.A = self.A0(self.x_grid, self.y_grid)
         self.dx = self.Lx / self.Nx
         self.dy = self.Ly / self.Ny
 
@@ -78,26 +83,23 @@ class Params:
             np.abs(self.ky_grid) <= self.ky_cut
         )
 
-        # Initalize arrays
-        # self.wzq = np.zeros(
-        #     (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
-        # )
-        # self.vx = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        # self.vy = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        # self.psi = np.zeros(
-        #     (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
-        # )
-        # # Initialize electromagnetic arrays
-        # self.jzq = np.zeros(
-        #     (self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1))
-        # )
-        # self.bx = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        # self.by = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        # self.A = np.zeros((self.Ny, self.Nx, int(np.ceil(self.nt / self.nt_save) + 1)))
-        self.cfl = None
+        self.Ahat = fft2d(
+            self.A,
+            Nx=self.Nx,
+            Ny=self.Ny,
+            inverse=False,
+            dealias_mask=self.dealias_mask,
+        )
+        # Use k2 * Ahat since convention being used is -laplacian*A
+        self.j = fft2d(
+            self.k2 * self.Ahat,
+            Nx=self.Nx,
+            Ny=self.Ny,
+            inverse=True,
+            dealias_mask=self.dealias_mask,
+        )
 
-        # self.wzq[:, :, 0] = self.w
-        # self.jzq[:, :, 0] = self.j
+        self.cfl = None
 
         # Initialize viscosity
         # Del^2 or set it to the power, add setting for hyperviscosity
@@ -112,6 +114,19 @@ class Params:
 
             self.res1 = np.exp(-((self.k2 * (self.dx / np.pi) ** 2) ** 4))
             self.res2 = (1.0 + self.res1) / 2.0
+
+        # Exponential integrators (ab2, ab3, rk4) take z = L * dt for each field.
+        # Hyperviscosity is applied as a spectral filter after each step instead.
+        if not self.hyper:
+            self.z_visc = -self.nu * self.k2 * self.dt
+            self.z_res = -self.eta * self.k2 * self.dt
+            self.visc_filter = None
+            self.res_filter = None
+        else:
+            self.z_visc = np.zeros_like(self.k2)
+            self.z_res = np.zeros_like(self.k2)
+            self.visc_filter = np.exp(-((self.k2 * (self.dx / np.pi) ** 2) ** 4))
+            self.res_filter = self.visc_filter.copy()
 
     def __iter__(self):
         return iter(vars(self).items())

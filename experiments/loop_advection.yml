@@ -1,0 +1,24 @@
+
+params:
+  Nx: 128
+  Ny: 64
+  Lx: 2.0 # domain x in [-1, 1]
+  Ly: 1.0 # domain y in [-0.5, 0.5]
+  dt: 0.0001
+  nt: 30000 # t = 5, loop should return to the start at t = 1, 2, 3, ...
+  nt_save: 10 # save every 0.1, includes integer times
+  eta: 0.000001 # must be non-zero, res2 divides by eta
+  nu: 0.000001
+  # Uniform background velocity V0 * (cos(theta), sin(theta)),
+  # V0 = sqrt(5), theta = atan(0.5)  ->  (2, 1)
+  v0x: 2.0
+  v0y: 1.0
+  symm: True
+
+extra_metadata:
+  A_0: 0.001
+  R: 0.3
+  notes: "Loop advection (Gardiner & Stone), V = (2, 1), loop returns to its start at integer times"
+
+initial_conditions:
+  name: "loop_advection"
