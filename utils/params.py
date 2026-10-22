@@ -22,6 +22,8 @@ class Params:
         nt_save (int): Number of time steps to save.
         nu (float): Viscosity coefficient.
         eta (float): Magnetic resistivity coefficient.
+        integrator (str): Time integrator: "ab2", "ab3" or "rk4" (ETD schemes),
+            or "ab2-etd-approx" / "ab3-etd-approx" (integrating-factor approximation).
     """
 
     w0: callable
@@ -41,6 +43,7 @@ class Params:
     v0x: float = 0.0
     v0y: float = 0.0
     symm: bool = True
+    integrator: str = "ab2"
 
     def __post_init__(self):
 
@@ -111,6 +114,19 @@ class Params:
 
             self.res1 = np.exp(-((self.k2 * (self.dx / np.pi) ** 2) ** 4))
             self.res2 = (1.0 + self.res1) / 2.0
+
+        # Exponential integrators (ab2, ab3, rk4) take z = L * dt for each field.
+        # Hyperviscosity is applied as a spectral filter after each step instead.
+        if not self.hyper:
+            self.z_visc = -self.nu * self.k2 * self.dt
+            self.z_res = -self.eta * self.k2 * self.dt
+            self.visc_filter = None
+            self.res_filter = None
+        else:
+            self.z_visc = np.zeros_like(self.k2)
+            self.z_res = np.zeros_like(self.k2)
+            self.visc_filter = np.exp(-((self.k2 * (self.dx / np.pi) ** 2) ** 4))
+            self.res_filter = self.visc_filter.copy()
 
     def __iter__(self):
         return iter(vars(self).items())

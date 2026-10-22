@@ -1,14 +1,14 @@
 
 params:
-  Nx: 64
-  Ny: 64
+  Nx: 2048
+  Ny: 2048
   Lx: 6.28318530718 # 2 * pi
   Ly: 6.28318530718 # 2 * pi
   dt: 0.001
   nt: 1000
   nt_save: 1
-  eta: 0.000001
-  nu: 0.000001
+  eta: 0.001
+  nu: 0.001
   symm: False
 
 extra_metadata:
