@@ -19,7 +19,9 @@ class Params:
         Ly (float): Length of domain in y direction.
         dt (float): Time step.
         nt (int): Number of time steps.
-        nt_save (int): Number of time steps to save.
+        nt_save (int): Save a snapshot every nt_save time steps.
+        save_steps (list[int], optional): Extra time step indices that are
+            always saved, in addition to the regular nt_save snapshots.
         nu (float): Viscosity coefficient.
         eta (float): Magnetic resistivity coefficient.
         integrator (str): Time integrator: "ab2", "ab3" or "rk4" (ETD schemes),
@@ -44,8 +46,15 @@ class Params:
     v0y: float = 0.0
     symm: bool = True
     integrator: str = "ab2"
+    save_steps: list | None = None
 
     def __post_init__(self):
+        if self.save_steps is not None:
+            self.save_steps = np.unique(np.asarray(self.save_steps, dtype=int))
+            if self.save_steps.size and (
+                self.save_steps.min() < 0 or self.save_steps.max() >= self.nt
+            ):
+                raise ValueError(f"save_steps must be in [0, nt={self.nt})")
 
         # Create discrete grid
         if self.symm:
@@ -79,8 +88,8 @@ class Params:
         # Implement 2/3 dealiasing rule
         self.kx_cut = (2 * np.pi / self.Lx) * (self.Nx // 3)
         self.ky_cut = (2 * np.pi / self.Ly) * (self.Ny // 3)
-        self.dealias_mask = (np.abs(self.kx_grid) <= self.kx_cut) & (
-            np.abs(self.ky_grid) <= self.ky_cut
+        self.dealias_mask = (np.abs(self.kx_grid) < self.kx_cut) & (
+            np.abs(self.ky_grid) < self.ky_cut
         )
 
         self.Ahat = fft2d(
