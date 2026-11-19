@@ -232,6 +232,9 @@ class FFT2DSolver:
                 )
             rhs = lambda state: self._rhs(state)[0]
 
+            save_steps = self.params.save_steps
+            save_set = None if save_steps is None else {int(s) for s in save_steps}
+
             # Compute nonlinear advection term
             state = (wz0.copy(), Az0.copy())
             nonlin, vorticity_results = self._rhs(state)
@@ -260,14 +263,16 @@ class FFT2DSolver:
                     ),
                 )
 
-                if t % self.params.nt_save == 0:
+                if t % self.params.nt_save == 0 or (
+                    save_set is not None and t in save_set
+                ):
                     out.append_fields(
                         t * self.params.dt,
                         vorticity_results["A"],
                         vorticity_results["psi"],
                     )
                     print(
-                        f"CFL: {self._cfl(vorticity_results['vx'], vorticity_results['vy'], vorticity_results['bx'], vorticity_results['by'])}"
+                        f"Step: {t}, CFL: {self._cfl(vorticity_results['vx'], vorticity_results['vy'], vorticity_results['bx'], vorticity_results['by'])}"
                     )
 
                 # Advect forward one step
